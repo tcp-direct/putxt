@@ -1,4 +1,4 @@
-module putxt
+module git.tcp.direct/kayos/putxt
 
 go 1.17
 
