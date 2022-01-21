@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/rs/zerolog/log"
 
-	termbin "putxt"
+	termbin "git.tcp.direct/kayos/putxt"
 )
 
 func init() {
@@ -31,7 +31,7 @@ func incoming() {
 				Int("Size", msg.Size).
 				Msg("INCOMING_DATA")
 		case "FINISH":
-				fallthrough
+			fallthrough
 		case "DEBUG":
 			log.Debug().
 				Str("RemoteAddr", msg.RAddr).
