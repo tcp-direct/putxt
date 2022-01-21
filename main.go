@@ -27,19 +27,56 @@ var (
 	Rater *rate5.Limiter
 )
 
+type MessageType uint8
+
+const (
+	Error MessageType = iota
+	IncomingData
+	NewConn
+	Finish
+	Debug
+	Final
+	ReturnURL
+	ReturnError
+)
+
 // Message is a struct that encapsulates status messages to send down the Msg channel
 type Message struct {
-	Type    string
+	Type    MessageType
 	RAddr   string
 	Content string
 	Bytes   []byte
 	Size    int
 }
 
+func MsgTypeToStr(m MessageType) (s string) {
+	switch m {
+	case Error:
+		s = "ERROR"
+	case IncomingData:
+		s = "INCOMING_DATA"
+	case Finish:
+		s = "FINISH"
+	case Debug:
+		s = "DEBUG"
+	case Final:
+		s = "FINAL"
+	case NewConn:
+		s = "NEW_CONN"
+	default:
+		s = "INVALID"
+	}
+	return
+}
+
 // Identity is used for rate5's Identity implementation.
 type Identity struct {
 	Actual net.IP
 	Addr   net.Addr
+}
+
+func UseGzip(toggle bool) {
+	Gzip = toggle
 }
 
 // UniqueKey implements rate5's Identity interface.
@@ -64,12 +101,12 @@ func termStatus(m Message) {
 		if m.Size != 0 {
 			suffix = " (" + strconv.Itoa(m.Size) + ")"
 		}
-		println("[" + m.RAddr + "][" + m.Type + "] " + m.Content + suffix)
+		println("[" + m.RAddr + "][" + MsgTypeToStr(m.Type) + "] " + m.Content + suffix)
 	}
 }
 
 func serve(c net.Conn) {
-	termStatus(Message{Type: "NEW_CONN", RAddr: c.RemoteAddr().String()})
+	termStatus(Message{Type: NewConn, RAddr: c.RemoteAddr().String()})
 	var (
 		data   []byte
 		final  []byte
@@ -82,7 +119,7 @@ func serve(c net.Conn) {
 			println(err.Error())
 		}
 		c.Close()
-		termStatus(Message{Type: "ERROR", RAddr: c.RemoteAddr().String(), Content: "RATELIMITED"})
+		termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Content: "RATELIMITED"})
 		return
 	}
 
@@ -96,14 +133,14 @@ func serve(c net.Conn) {
 			switch err.Error() {
 			case "EOF":
 				c.Close()
-				termStatus(Message{Type: "ERROR", RAddr: c.RemoteAddr().String(), Content: "EOF"})
+				termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Content: "EOF"})
 				return
 			case "read tcp " + c.LocalAddr().String() + "->" + c.RemoteAddr().String() + ": i/o timeout":
-				termStatus(Message{Type: "FINISH", RAddr: c.RemoteAddr().String(), Size: length, Content: "TIMEOUT"})
+				termStatus(Message{Type: Finish, RAddr: c.RemoteAddr().String(), Size: length, Content: "TIMEOUT"})
 				done = true
 			default:
 				c.Close()
-				termStatus(Message{Type: "ERROR", Size: length, Content: err.Error()})
+				termStatus(Message{Type: Error, Size: length, Content: err.Error()})
 				return
 			}
 		}
@@ -112,7 +149,7 @@ func serve(c net.Conn) {
 		}
 		length += n
 		if length > MaxSize {
-			termStatus(Message{Type: "ERROR", RAddr: c.RemoteAddr().String(), Size: length, Content: "MAX_SIZE_EXCEEDED"})
+			termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Size: length, Content: "MAX_SIZE_EXCEEDED"})
 			if _, err := c.Write([]byte("MAX_SIZE_EXCEEDED")); err != nil {
 				println(err.Error())
 			}
@@ -120,10 +157,10 @@ func serve(c net.Conn) {
 			return
 		}
 		data = append(data, buf[:n]...)
-		termStatus(Message{Type: "INCOMING_DATA", RAddr: c.RemoteAddr().String(), Size: length})
+		termStatus(Message{Type: IncomingData, RAddr: c.RemoteAddr().String(), Size: length})
 	}
 	if !util.IsText(data) {
-		termStatus(Message{Type: "ERROR", RAddr: c.RemoteAddr().String(), Content: "BINARY_DATA_REJECTED"})
+		termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Content: "BINARY_DATA_REJECTED"})
 		if _, err := c.Write([]byte("BINARY_DATA_REJECTED")); err != nil {
 			println(err.Error())
 		}
@@ -137,18 +174,18 @@ func serve(c net.Conn) {
 		var gzerr error
 		if final, gzerr = gzipCompress(data); gzerr == nil {
 			diff := len(data) - len(final)
-			termStatus(Message{Type: "DEBUG", RAddr: c.RemoteAddr().String(), Content: "GZIP_RESULT", Size: diff})
+			termStatus(Message{Type: Debug, RAddr: c.RemoteAddr().String(), Content: "GZIP_RESULT", Size: diff})
 		} else {
-			termStatus(Message{Type: "ERROR", RAddr: c.RemoteAddr().String(), Content: "GZIP_ERROR: " + gzerr.Error()})
+			termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Content: "GZIP_ERROR: " + gzerr.Error()})
 		}
 	}
 
-	termStatus(Message{Type: "FINAL", RAddr: c.RemoteAddr().String(), Size: len(final), Bytes: final, Content: "SUCCESS"})
+	termStatus(Message{Type: Final, RAddr: c.RemoteAddr().String(), Size: len(final), Bytes: final, Content: "SUCCESS"})
 	url := <-Reply
 	switch url.Type {
-	case "URL":
+	case ReturnURL:
 		c.Write([]byte(url.Content))
-	case "ERROR":
+	case ReturnError:
 		c.Write([]byte("ERROR: " + url.Content))
 	default:
 		//
@@ -166,7 +203,7 @@ func Listen(addr string, port string) error {
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			termStatus(Message{Type: "ERROR", Content: err.Error()})
+			termStatus(Message{Type: Error, Content: err.Error()})
 		}
 		go serve(c)
 	}
