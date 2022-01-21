@@ -20,25 +20,23 @@ func incoming() {
 	select {
 	case msg = <-termbin.Msg:
 		switch msg.Type {
-		case "ERROR":
+		case termbin.Error:
 			log.Error().
 				Str("RemoteAddr", msg.RAddr).
 				Int("Size", msg.Size).
 				Msg(msg.Content)
-		case "INCOMING_DATA":
+		case termbin.IncomingData:
 			log.Debug().
 				Str("RemoteAddr", msg.RAddr).
 				Int("Size", msg.Size).
 				Msg("INCOMING_DATA")
-		case "FINISH":
-			fallthrough
-		case "DEBUG":
+		case termbin.Debug:
 			log.Debug().
 				Str("RemoteAddr", msg.RAddr).
 				Int("Size", msg.Size).
 				Msg(msg.Content)
 
-		case "FINAL":
+		case termbin.Final:
 			log.Info().
 				Str("RemoteAddr", msg.RAddr).
 				Int("Size", msg.Size).
@@ -51,6 +49,10 @@ func incoming() {
 			} else {
 				println(string(msg.Bytes))
 			}
+		case termbin.Finish:
+			break
+		default:
+			log.Fatal().Msg("invalid message")
 		}
 	}
 }
