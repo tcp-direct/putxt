@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/rs/zerolog v1.25.0
 	github.com/yunginnanet/Rate5 v0.0.0-20210921121404-fa5679adcf65
-	golang.org/x/tools v0.1.6
+	golang.org/x/tools v0.1.11
 	inet.af/netaddr v0.0.0-20210903134321-85fa6c94624e
 )
 
