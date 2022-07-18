@@ -3,6 +3,7 @@ module git.tcp.direct/kayos/putxt
 go 1.18
 
 require (
+	git.tcp.direct/kayos/common v0.7.0
 	github.com/rs/zerolog v1.27.0
 	github.com/yunginnanet/Rate5 v1.0.1
 	golang.org/x/tools v0.1.11
