@@ -2,6 +2,7 @@ package termbin
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -10,6 +11,12 @@ import (
 	"github.com/yunginnanet/Rate5"
 	"golang.org/x/tools/godoc/util"
 	"inet.af/netaddr"
+)
+
+const (
+	MessageRatelimited = "RATELIMIT_REACHED"
+	MessageSizeLimited = "MAX_SIZE_EXCEEDED"
+	MessageBinaryData  = "BINARY_DATA_REJECTED"
 )
 
 type TermDumpster struct {
@@ -30,12 +37,19 @@ type Handler interface {
 	Ingest(data []byte) ([]byte, error)
 }
 
+type dummyLogger struct{}
+
+func (dummyLogger) Printf(format string, v ...interface{}) {
+	_, _ = fmt.Printf(format, v...)
+}
+
 func NewTermDumpster(handler Handler) *TermDumpster {
 	td := &TermDumpster{
 		maxSize: 3 << 20,
 		timeout: 5 * time.Second,
 		Limiter: rate5.NewStrictLimiter(60, 5),
 		handler: handler,
+		log:     dummyLogger{},
 	}
 	td.Pool = &sync.Pool{
 		New: func() any { return new(bytes.Buffer) },
@@ -58,18 +72,34 @@ func (td *TermDumpster) WithTimeout(timeout time.Duration) *TermDumpster {
 	return td
 }
 
-type client struct {
-	addr string
+func (td *TermDumpster) WithLogger(logger Logger) *TermDumpster {
+	td.log = logger
+	return td
+}
+
+type termbinClient struct {
+	parent *TermDumpster
+	addr   string
 	net.Conn
 }
 
-func (c *client) UniqueKey() string {
+func (c *termbinClient) UniqueKey() string {
 	return c.addr
 }
 
-func newClient(c net.Conn) *client {
+func (td *TermDumpster) newClient(c net.Conn) *termbinClient {
 	cipp, _ := netaddr.ParseIPPort(c.RemoteAddr().String())
-	return &client{addr: cipp.IP().String(), Conn: c}
+	return &termbinClient{parent: td, addr: cipp.IP().String(), Conn: c}
+}
+
+func (c *termbinClient) write(data []byte) {
+	if _, err := c.Write(data); err != nil {
+		c.parent.log.Printf("termbinClient: %s error: %w", c.RemoteAddr().String(), err)
+	}
+}
+
+func (c *termbinClient) writeString(data string) {
+	c.write([]byte(data))
 }
 
 func (td *TermDumpster) accept(c net.Conn) {
@@ -77,24 +107,19 @@ func (td *TermDumpster) accept(c net.Conn) {
 		final  []byte
 		length int64
 	)
-
-	client := newClient(c)
+	client := td.newClient(c)
 	if td.Check(client) {
-		if _, err := client.Write([]byte("RATELIMIT_REACHED")); err != nil {
-			println(err.Error())
-		}
+		client.writeString(MessageRatelimited)
 		client.Close()
-		// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Content: "RATELIMITED"})
+		td.log.Printf("termbinClient: %s error: %s", client.RemoteAddr().String(), MessageRatelimited)
 		return
 	}
-
 	buf := td.Pool.Get().(*bytes.Buffer)
 	defer func() {
 		_ = client.Close()
 		buf.Reset()
 		td.Put(buf)
 	}()
-
 readLoop:
 	for {
 		if err := client.SetReadDeadline(time.Now().Add(td.timeout)); err != nil {
@@ -104,45 +129,33 @@ readLoop:
 		if err != nil {
 			switch err.Error() {
 			case "EOF":
-				// termStatus(td.msg(EOF)
 				return
 			case "read tcp " + client.LocalAddr().String() + "->" + client.RemoteAddr().String() + ": i/o timeout":
-				// termStatus(Message{Type: Finish, Size: length, Content: "TIMEOUT"})
 				break readLoop
 			default:
-				// termStatus(Message{Type: Error, Size: length, Content: err.Error()})
+				td.log.Printf("termbinClient: %s error: %w", client.RemoteAddr().String(), err)
 				return
 			}
 		}
-
 		length += n
 		if length > td.maxSize {
-			// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Size: length, Content: "MAX_SIZE_EXCEEDED"})
-			if _, err := client.Write([]byte("MAX_SIZE_EXCEEDED")); err != nil {
-				println(err.Error())
-			}
+			client.writeString(MessageRatelimited)
 			return
 		}
-		// termStatus(Message{Type: IncomingData, Remote: client.RemoteAddr().String(), Size: length})
 	}
 	if !util.IsText(buf.Bytes()) {
-		// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Content: "BINARY_DATA_REJECTED"})
-		if _, err := client.Write([]byte("BINARY_DATA_REJECTED")); err != nil {
-			println(err.Error())
-		}
+		client.writeString(MessageBinaryData)
 		return
 	}
-
 	if td.gzip {
 		if final = squish.Gzip(buf.Bytes()); final == nil {
 			final = buf.Bytes()
 		}
 	}
-
 	resp, err := td.handler.Ingest(final)
 	if err != nil {
 		if resp == nil {
-			_, _ = client.Write([]byte("INTERNAL_ERROR"))
+			client.writeString("INTERNAL_ERROR")
 		}
 		println(err.Error())
 	}
