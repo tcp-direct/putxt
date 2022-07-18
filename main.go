@@ -157,7 +157,7 @@ readLoop:
 		if resp == nil {
 			client.writeString("INTERNAL_ERROR")
 		}
-		println(err.Error())
+		td.log.Printf("termbinClient: %s error: %w", client.RemoteAddr().String(), err)
 	}
 	client.Write(resp)
 }
