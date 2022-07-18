@@ -1,72 +1,36 @@
 package main
 
+// meant to act as a simple example
+
 import (
-	"github.com/rs/zerolog/log"
+	"errors"
+	"strings"
+	"time"
+
+	"git.tcp.direct/kayos/common/squish"
 
 	termbin "git.tcp.direct/kayos/putxt"
 )
 
-func init() {
-	termbin.UseChannel = true
-}
+type handler struct{}
 
-func incoming() {
-	var (
-		msg      termbin.Message
-		deflated []byte
-		err      error
-	)
-
-	select {
-	case msg = <-termbin.Msg:
-		switch msg.Type {
-		case termbin.Error:
-			log.Error().
-				Str("RemoteAddr", msg.RAddr).
-				Int("Size", msg.Size).
-				Msg(msg.Content)
-		case termbin.IncomingData:
-			log.Debug().
-				Str("RemoteAddr", msg.RAddr).
-				Int("Size", msg.Size).
-				Msg("INCOMING_DATA")
-		case termbin.Debug:
-			log.Debug().
-				Str("RemoteAddr", msg.RAddr).
-				Int("Size", msg.Size).
-				Msg(msg.Content)
-
-		case termbin.Final:
-			log.Info().
-				Str("RemoteAddr", msg.RAddr).
-				Int("Size", msg.Size).
-				Msg(msg.Content)
-			if termbin.Gzip {
-				if deflated, err = termbin.Deflate(msg.Bytes); err != nil {
-					log.Error().Err(err).Msg("DEFLATE_ERROR")
-				}
-				println(string(deflated))
-			} else {
-				println(string(msg.Bytes))
-			}
-		case termbin.Finish:
-			break
-		default:
-			log.Fatal().Msg("invalid message")
-		}
+func (h *handler) Ingest(data []byte) ([]byte, error) {
+	var err error
+	data, err = squish.Gunzip(data)
+	if err != nil {
+		return nil, err
 	}
+	if strings.ReplaceAll(string(data), "\n", "") == "ping" {
+		println("got ping, sending pong...")
+		return []byte("pong"), nil
+	}
+	println(string(data))
+	return []byte("invalid request"), errors.New("invalid data")
 }
 
 func main() {
-	if termbin.UseChannel {
-		go func() {
-			for {
-				incoming()
-			}
-		}()
-	}
-
-	err := termbin.Listen("127.0.0.1", "8888")
+	td := termbin.NewTermDumpster(&handler{}).WithGzip().WithMaxSize(3 << 20).WithTimeout(5 * time.Second)
+	err := td.Listen("127.0.0.1", "8888")
 	if err != nil {
 		println(err.Error())
 		return

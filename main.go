@@ -1,200 +1,157 @@
 package termbin
 
 import (
+	"bytes"
 	"net"
-	"strconv"
+	"sync"
 	"time"
 
 	"github.com/yunginnanet/Rate5"
 	"golang.org/x/tools/godoc/util"
-	ipa "inet.af/netaddr"
+	"inet.af/netaddr"
 )
 
-var (
-	// Msg is a channel for status information during concurrent server operations
-	Msg chan Message
-	// Reply is a channel to receive messages to send our client upon completion
-	Reply chan Message
-	// Timeout is the read timeout for incoming data in seconds
-	Timeout = 4
-	// MaxSize for incoming data (default: 3 << 30 or 3 MiB)
-	MaxSize = 3 << 20
-	// Gzip is our toggle for enabling or disabling gzip compression
-	Gzip = true
-	// UseChannel enables or disables sending status messages through an exported channel, otherwise debug messages will be printed.
-	UseChannel = true
-	// Rater is a ratelimiter powered by Rate5.
-	Rater *rate5.Limiter
-)
-
-type MessageType uint8
-
-const (
-	Error MessageType = iota
-	IncomingData
-	NewConn
-	Finish
-	Debug
-	Final
-	ReturnURL
-	ReturnError
-)
-
-// Message is a struct that encapsulates status messages to send down the Msg channel
-type Message struct {
-	Type    MessageType
-	RAddr   string
-	Content string
-	Bytes   []byte
-	Size    int
+type TermDumpster struct {
+	gzip    bool
+	maxSize int64
+	timeout time.Duration
+	handler Handler
+	*rate5.Limiter
+	*sync.Pool
 }
 
-func MsgTypeToStr(m MessageType) (s string) {
-	switch m {
-	case Error:
-		s = "ERROR"
-	case IncomingData:
-		s = "INCOMING_DATA"
-	case Finish:
-		s = "FINISH"
-	case Debug:
-		s = "DEBUG"
-	case Final:
-		s = "FINAL"
-	case NewConn:
-		s = "NEW_CONN"
-	default:
-		s = "INVALID"
+type Handler interface {
+	Ingest(data []byte) ([]byte, error)
+}
+
+func NewTermDumpster(handler Handler) *TermDumpster {
+	td := &TermDumpster{
+		maxSize: 3 << 20,
+		timeout: 5 * time.Second,
+		Limiter: rate5.NewStrictLimiter(60, 5),
+		handler: handler,
 	}
-	return
-}
-
-// Identity is used for rate5's Identity implementation.
-type Identity struct {
-	Actual net.IP
-	Addr   net.Addr
-}
-
-func UseGzip(toggle bool) {
-	Gzip = toggle
-}
-
-// UniqueKey implements rate5's Identity interface.
-func (t *Identity) UniqueKey() string {
-	if t.Addr != nil {
-		t.Actual = net.ParseIP(ipa.MustParseIPPort(t.Addr.String()).String())
+	td.Pool = &sync.Pool{
+		New: func() any { return new(bytes.Buffer) },
 	}
-	return t.Actual.String()
+	return td
 }
 
-func init() {
-	Msg = make(chan Message)
-	Reply = make(chan Message)
-	Rater = rate5.NewDefaultLimiter()
+func (td *TermDumpster) WithGzip() *TermDumpster {
+	td.gzip = true
+	return td
 }
 
-func termStatus(m Message) {
-	if UseChannel {
-		Msg <- m
-	} else {
-		var suffix string
-		if m.Size != 0 {
-			suffix = " (" + strconv.Itoa(m.Size) + ")"
-		}
-		println("[" + m.RAddr + "][" + MsgTypeToStr(m.Type) + "] " + m.Content + suffix)
-	}
+func (td *TermDumpster) WithMaxSize(size int64) *TermDumpster {
+	td.maxSize = size
+	return td
 }
 
-func serve(c net.Conn) {
-	termStatus(Message{Type: NewConn, RAddr: c.RemoteAddr().String()})
+func (td *TermDumpster) WithTimeout(timeout time.Duration) *TermDumpster {
+	td.timeout = timeout
+	return td
+}
+
+type client struct {
+	addr string
+	net.Conn
+}
+
+func (c *client) UniqueKey() string {
+	return c.addr
+}
+
+func newClient(c net.Conn) *client {
+	cipp, _ := netaddr.ParseIPPort(c.RemoteAddr().String())
+	return &client{addr: cipp.IP().String(), Conn: c}
+}
+
+func (td *TermDumpster) accept(c net.Conn) {
 	var (
-		data   []byte
 		final  []byte
-		length int
-		done   bool
+		length int64
 	)
 
-	if Rater.Check(&Identity{Addr: c.RemoteAddr()}) {
-		if _, err := c.Write([]byte("RATELIMIT_REACHED")); err != nil {
+	client := newClient(c)
+	if td.Check(client) {
+		if _, err := client.Write([]byte("RATELIMIT_REACHED")); err != nil {
 			println(err.Error())
 		}
-		c.Close()
-		termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Content: "RATELIMITED"})
+		client.Close()
+		// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Content: "RATELIMITED"})
 		return
 	}
 
+	buf := td.Pool.Get().(*bytes.Buffer)
+	defer func() {
+		_ = client.Close()
+		buf.Reset()
+		td.Put(buf)
+	}()
+
+readLoop:
 	for {
-		if err := c.SetReadDeadline(time.Now().Add(time.Duration(Timeout) * time.Second)); err != nil {
+		if err := client.SetReadDeadline(time.Now().Add(td.timeout)); err != nil {
 			println(err.Error())
 		}
-		buf := make([]byte, MaxSize)
-		n, err := c.Read(buf)
+		n, err := buf.ReadFrom(client)
 		if err != nil {
 			switch err.Error() {
 			case "EOF":
-				c.Close()
-				termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Content: "EOF"})
+				// termStatus(td.msg(EOF)
 				return
-			case "read tcp " + c.LocalAddr().String() + "->" + c.RemoteAddr().String() + ": i/o timeout":
-				termStatus(Message{Type: Finish, RAddr: c.RemoteAddr().String(), Size: length, Content: "TIMEOUT"})
-				done = true
+			case "read tcp " + client.LocalAddr().String() + "->" + client.RemoteAddr().String() + ": i/o timeout":
+				// termStatus(Message{Type: Finish, Size: length, Content: "TIMEOUT"})
+				break readLoop
 			default:
-				c.Close()
-				termStatus(Message{Type: Error, Size: length, Content: err.Error()})
+				// termStatus(Message{Type: Error, Size: length, Content: err.Error()})
 				return
 			}
 		}
-		if done {
-			break
-		}
+
 		length += n
-		if length > MaxSize {
-			termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Size: length, Content: "MAX_SIZE_EXCEEDED"})
-			if _, err := c.Write([]byte("MAX_SIZE_EXCEEDED")); err != nil {
+		if length > td.maxSize {
+			// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Size: length, Content: "MAX_SIZE_EXCEEDED"})
+			if _, err := client.Write([]byte("MAX_SIZE_EXCEEDED")); err != nil {
 				println(err.Error())
 			}
-			c.Close()
 			return
 		}
-		data = append(data, buf[:n]...)
-		termStatus(Message{Type: IncomingData, RAddr: c.RemoteAddr().String(), Size: length})
+		// termStatus(Message{Type: IncomingData, Remote: client.RemoteAddr().String(), Size: length})
 	}
-	if !util.IsText(data) {
-		termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Content: "BINARY_DATA_REJECTED"})
-		if _, err := c.Write([]byte("BINARY_DATA_REJECTED")); err != nil {
+	if !util.IsText(buf.Bytes()) {
+		// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Content: "BINARY_DATA_REJECTED"})
+		if _, err := client.Write([]byte("BINARY_DATA_REJECTED")); err != nil {
 			println(err.Error())
 		}
-		c.Close()
 		return
 	}
 
-	final = data
-
-	if Gzip {
+	if td.gzip {
 		var gzerr error
-		if final, gzerr = gzipCompress(data); gzerr == nil {
-			diff := len(data) - len(final)
-			termStatus(Message{Type: Debug, RAddr: c.RemoteAddr().String(), Content: "GZIP_RESULT", Size: diff})
+		if final, gzerr = gzipCompress(buf.Bytes()); gzerr == nil {
+			// diff := len(buf.Bytes()) - len(final)
+			// termStatus(Message{Type: Debug, Remote: client.RemoteAddr().String(), Content: "GZIP_RESULT", Size: diff})
 		} else {
-			termStatus(Message{Type: Error, RAddr: c.RemoteAddr().String(), Content: "GZIP_ERROR: " + gzerr.Error()})
+			final = buf.Bytes()
+			// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Content: "GZIP_ERROR: " + gzerr.Error()})
 		}
 	}
 
-	termStatus(Message{Type: Final, RAddr: c.RemoteAddr().String(), Size: len(final), Bytes: final, Content: "SUCCESS"})
-	url := <-Reply
-	switch url.Type {
-	case ReturnURL:
-		c.Write([]byte(url.Content))
-	case ReturnError:
-		c.Write([]byte("ERROR: " + url.Content))
-	default:
-		//
+	// termStatus(Message{Type: Final, Remote: client.RemoteAddr().String(), Size: len(final), Data: final, Content: "SUCCESS"})
+	resp, err := td.handler.Ingest(final)
+	if err != nil {
+		// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Content: err.Error()})
+		if resp == nil {
+			_, _ = client.Write([]byte("INTERNAL_ERROR"))
+		}
+		println(err.Error())
 	}
-	c.Close()
+	client.Write(resp)
 }
 
 // Listen starts the TCP server
-func Listen(addr string, port string) error {
+func (td *TermDumpster) Listen(addr string, port string) error {
 	l, err := net.Listen("tcp", addr+":"+port)
 	if err != nil {
 		return err
@@ -203,8 +160,8 @@ func Listen(addr string, port string) error {
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			termStatus(Message{Type: Error, Content: err.Error()})
+			// termStatus(Message{Type: Error, Content: err.Error()})
 		}
-		go serve(c)
+		go td.accept(c)
 	}
 }
