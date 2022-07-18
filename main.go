@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"git.tcp.direct/kayos/common/squish"
 	"github.com/yunginnanet/Rate5"
 	"golang.org/x/tools/godoc/util"
 	"inet.af/netaddr"
@@ -16,8 +17,13 @@ type TermDumpster struct {
 	maxSize int64
 	timeout time.Duration
 	handler Handler
+	log     Logger
 	*rate5.Limiter
 	*sync.Pool
+}
+
+type Logger interface {
+	Printf(format string, v ...interface{})
 }
 
 type Handler interface {
@@ -128,20 +134,13 @@ readLoop:
 	}
 
 	if td.gzip {
-		var gzerr error
-		if final, gzerr = gzipCompress(buf.Bytes()); gzerr == nil {
-			// diff := len(buf.Bytes()) - len(final)
-			// termStatus(Message{Type: Debug, Remote: client.RemoteAddr().String(), Content: "GZIP_RESULT", Size: diff})
-		} else {
+		if final = squish.Gzip(buf.Bytes()); final == nil {
 			final = buf.Bytes()
-			// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Content: "GZIP_ERROR: " + gzerr.Error()})
 		}
 	}
 
-	// termStatus(Message{Type: Final, Remote: client.RemoteAddr().String(), Size: len(final), Data: final, Content: "SUCCESS"})
 	resp, err := td.handler.Ingest(final)
 	if err != nil {
-		// termStatus(Message{Type: Error, Remote: client.RemoteAddr().String(), Content: err.Error()})
 		if resp == nil {
 			_, _ = client.Write([]byte("INTERNAL_ERROR"))
 		}
@@ -160,7 +159,8 @@ func (td *TermDumpster) Listen(addr string, port string) error {
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			// termStatus(Message{Type: Error, Content: err.Error()})
+			td.log.Printf("Error accepting connection: %s", err.Error())
+			continue
 		}
 		go td.accept(c)
 	}
