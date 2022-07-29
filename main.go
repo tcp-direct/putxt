@@ -129,7 +129,7 @@ readLoop:
 		if err != nil {
 			switch err.Error() {
 			case "EOF":
-				return
+				break readLoop
 			case "read tcp " + client.LocalAddr().String() + "->" + client.RemoteAddr().String() + ": i/o timeout":
 				break readLoop
 			default:
@@ -159,7 +159,10 @@ readLoop:
 		}
 		td.log.Printf("termbinClient: %s error: %w", client.RemoteAddr().String(), err)
 	}
-	client.Write(resp)
+	_, err = client.Write(resp)
+	if err != nil {
+		td.log.Printf("termbinClient: %s failed to deliver result: %w", client.RemoteAddr().String(), err)
+	}
 }
 
 // Listen starts the TCP server
