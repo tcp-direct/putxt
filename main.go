@@ -123,7 +123,8 @@ func (td *TermDumpster) accept(c net.Conn) {
 readLoop:
 	for {
 		if err := client.SetReadDeadline(time.Now().Add(td.timeout)); err != nil {
-			println(err.Error())
+			td.log.Printf("failed to set read deadline: %s error: %w", client.RemoteAddr().String(), err)
+			return
 		}
 		n, err := buf.ReadFrom(client)
 		if err != nil {
@@ -139,7 +140,7 @@ readLoop:
 		}
 		length += n
 		if length > td.maxSize {
-			client.writeString(MessageRatelimited)
+			client.writeString(MessageSizeLimited)
 			return
 		}
 	}
