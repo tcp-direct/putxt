@@ -3,10 +3,10 @@ module git.tcp.direct/kayos/putxt
 go 1.18
 
 require (
-	git.tcp.direct/kayos/common v0.7.0
+	git.tcp.direct/kayos/common v0.7.1
 	github.com/yunginnanet/Rate5 v1.1.0
 	golang.org/x/tools v0.1.12
-	inet.af/netaddr v0.0.0-20220617031823-097006376321
+	inet.af/netaddr v0.0.0-20220811202034-502d2d690317
 )
 
 require (
