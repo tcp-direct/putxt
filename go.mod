@@ -5,7 +5,7 @@ go 1.18
 require (
 	git.tcp.direct/kayos/common v0.7.5
 	github.com/yunginnanet/Rate5 v1.1.0
-	golang.org/x/tools v0.1.12
+	golang.org/x/tools v0.2.0
 	inet.af/netaddr v0.0.0-20220811202034-502d2d690317
 )
 
