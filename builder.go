@@ -21,7 +21,7 @@ func NewTermDumpster(handler Handler) *TermDumpster {
 	td := &TermDumpster{
 		maxSize: 3 << 20,
 		timeout: 5 * time.Second,
-		Limiter: rate5.NewStrictLimiter(60, 5),
+		Limiter: rate5.NewStrictLimiter(60, 10),
 		handler: handler,
 		log:     dummyLogger{},
 		Pool:    pool.NewBufferFactory(),
