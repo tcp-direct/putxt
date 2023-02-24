@@ -1,5 +1,5 @@
-git.tcp.direct/kayos/common v0.7.7-0.20221211200246-c7eafdbc5267 h1:aEU5WCDbz/OyByGKwYbMokFpIJQiUttTXAvLmq9MBgI=
-git.tcp.direct/kayos/common v0.7.7-0.20221211200246-c7eafdbc5267/go.mod h1:R8vsVo/0dkoan2yuXG8d4E8FR0i5MBkGKOtgrsG62eY=
+git.tcp.direct/kayos/common v0.8.1 h1:gxcCaa7QlQzkvBPzcwoVyP89mexrxKvnmlnvh4PGu4o=
+git.tcp.direct/kayos/common v0.8.1/go.mod h1:r7lZuKTQz0uf/jNm61sz1XaMgK/RYRr7wtqr/cNYd8o=
 github.com/dvyukov/go-fuzz v0.0.0-20210103155950-6a8e9d1f2415/go.mod h1:11Gm+ccJnvAhCNLlf5+cS9KjtbaD5I5zaZpFMsTHWTw=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
