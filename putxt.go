@@ -4,13 +4,13 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"syscall"
 	"time"
 
 	"git.tcp.direct/kayos/common/squish"
 	"golang.org/x/tools/godoc/util"
-	"inet.af/netaddr"
 )
 
 type Handler interface {
@@ -28,8 +28,8 @@ func (c *termbinClient) UniqueKey() string {
 }
 
 func (td *TermDumpster) newClient(c net.Conn) *termbinClient {
-	cipp, _ := netaddr.ParseIPPort(c.RemoteAddr().String())
-	return &termbinClient{parent: td, addr: cipp.IP().String(), Conn: c}
+	cipp, _ := netip.ParseAddrPort(c.RemoteAddr().String())
+	return &termbinClient{parent: td, addr: cipp.Addr().String(), Conn: c}
 }
 
 func (c *termbinClient) write(data []byte) {
