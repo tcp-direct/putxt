@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"git.tcp.direct/kayos/common/squish"
-	"golang.org/x/tools/godoc/util"
 )
 
 type Handler interface {
@@ -79,7 +78,7 @@ readLoop:
 			return
 		}
 	}
-	if !util.IsText(buf.Bytes()) {
+	if !IsText(buf.Bytes()) {
 		client.writeString(MessageBinaryData)
 		return
 	}
