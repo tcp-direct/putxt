@@ -5,7 +5,6 @@ go 1.19
 require (
 	git.tcp.direct/kayos/common v0.9.3
 	github.com/yunginnanet/Rate5 v1.2.1
-	golang.org/x/tools v0.9.3
 )
 
 require (
