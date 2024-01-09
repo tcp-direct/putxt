@@ -1,12 +1,8 @@
-git.tcp.direct/kayos/common v0.8.6 h1:lt8nv+PrgAcbiOnbKUt7diza5hifR5fV3un6uIp/YVc=
-git.tcp.direct/kayos/common v0.8.6/go.mod h1:QGGn7d2l4xBG7Cs/g84JzItPpHWjtfiyy+PSMnf6TzE=
-git.tcp.direct/kayos/common v0.9.3 h1:MnQM4MH97zin+cloTsJRA3YEzagTGm/iR5sajpT+GoQ=
-git.tcp.direct/kayos/common v0.9.3/go.mod h1:tTqUGj50mpwoQD0Zsdsv6cpDzN9VfjnQMgpDC8aRfms=
+git.tcp.direct/kayos/common v0.9.6 h1:EITtktxZF/zkzqAhZZxvm6cZpFYoZ0P/gLB9RPatKUY=
+git.tcp.direct/kayos/common v0.9.6/go.mod h1:8y9b+PN1+ZVaQ/VugD9dkKe+uqhE8jH7a64RyF7h2rM=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/yunginnanet/Rate5 v1.2.1 h1:6G8j0RLZofS76l6cMvqa8v6yeGbn2yPNk0xqH6EXcnU=
 github.com/yunginnanet/Rate5 v1.2.1/go.mod h1:f0r66kVQZojRqUgVdLC/CKexMlF0nUDAmd01tBeF4Ms=
-golang.org/x/tools v0.9.3 h1:Gn1I8+64MsuTb/HpH+LmQtNas23LhUVr3rYZ0eKuaMM=
-golang.org/x/tools v0.9.3/go.mod h1:owI94Op576fPu3cIGQeHs3joujW/2Oc6MtlxbF5dfNc=
 nullprogram.com/x/rng v1.1.0 h1:SMU7DHaQSWtKJNTpNFIFt8Wd/KSmOuSDPXrMFp/UMro=
 nullprogram.com/x/rng v1.1.0/go.mod h1:glGw6V87vyfawxCzqOABL3WfL95G65az9Z2JZCylCkg=
