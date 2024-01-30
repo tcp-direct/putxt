@@ -3,7 +3,7 @@ module git.tcp.direct/kayos/putxt
 go 1.19
 
 require (
-	git.tcp.direct/kayos/common v0.9.6
+	git.tcp.direct/kayos/common v0.9.7
 	github.com/yunginnanet/Rate5 v1.3.0
 )
 
