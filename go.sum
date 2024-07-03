@@ -1,5 +1,5 @@
-git.tcp.direct/kayos/common v0.9.7 h1:k2k3fvvEFN9JV+0nyVWLoV8cGRDAhS/8ECO9tEKN+to=
-git.tcp.direct/kayos/common v0.9.7/go.mod h1:mmTOIi7k99yygTa1FSOZNoFEEbSTOQV/QpTLUaQU9Tk=
+git.tcp.direct/kayos/common v0.9.9 h1:GTJ1yxhlqemG4b8AyUvDYpSiMnxvGZGiBVKWQCO/YLY=
+git.tcp.direct/kayos/common v0.9.9/go.mod h1:mqqaU+YaD87DYwzoX1XCf8PTD4aTSqDLqsDNLsrngw8=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/yunginnanet/Rate5 v1.3.5 h1:H2KAcQ1MckjmsXGL20Gu36EMyWzryL7RWcatBxYSyeY=
