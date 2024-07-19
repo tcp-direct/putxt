@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	git.tcp.direct/kayos/common v1.0.0
-	github.com/yunginnanet/Rate5 v1.3.5
+	github.com/yunginnanet/Rate5 v1.3.6
 )
 
 require (
